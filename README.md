@@ -15,15 +15,6 @@ that hide their payloads behind layers of encoding.
 > Generalizes two earlier single-vendor tools into one engine: a TikTok decoder and a Meta/GraphQL
 > decoder now ship as built-in rule packs.
 
-## Screenshots
-
-<!-- Drop real Burp screenshots into docs/ and reference them here. -->
-| Decoded tree | Rules manager |
-|---|---|
-| ![Decoded tab](docs/decoded.png) | ![Rules tab](docs/rules.png) |
-
-*(Placeholders — add your own `docs/decoded.png` / `docs/rules.png`.)*
-
 ## What it does
 
 On any message, the **Decoded** tab peels the layers automatically:

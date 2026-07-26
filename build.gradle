@@ -1,0 +1,32 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+repositories { mavenCentral() }
+
+ext.montoyaVersion = '2026.4'
+
+dependencies {
+    // Provided by Burp at runtime — never bundled.
+    compileOnly "net.portswigger.burp.extensions:montoya-api:${montoyaVersion}"
+
+    // Pure-Java codecs, bundled into the shadow jar (no JNI).
+    implementation 'org.brotli:dec:0.1.2'            // brotli DECODE only (~30 KB)
+    implementation 'io.airlift:aircompressor:0.27'   // zstd/lz4/snappy (no-dict, ~180 KB)
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+// Load build/libs/polyproto.jar in Burp > Extensions > Add (Java).
+shadowJar {
+    archiveBaseName = 'polyproto'
+    archiveClassifier = ''
+    archiveVersion = ''
+}
+
+// Make `gradle build` produce the shadow jar as the primary artifact.
+tasks.named('jar') { enabled = false }
+tasks.named('build') { dependsOn tasks.named('shadowJar') }

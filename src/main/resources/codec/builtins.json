@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "tiktok.accept-encoding",
+      "name": "TikTok: defeat ttzip (force Accept-Encoding: gzip)",
+      "enabled": true, "priority": 900, "direction": "REQUEST",
+      "match": {
+        "hostsAny": ["tiktok", "tiktokv", "byteoversea", "bytedance", "musical.ly", "ibyteimg"],
+        "headers": [{ "name": "Accept-Encoding", "valueRegex": "ttzip" }]
+      },
+      "action": {
+        "rewriteHeader": [
+          { "name": "Accept-Encoding", "setValue": "gzip", "onlyIfPresent": true, "ifValueContains": "ttzip" }
+        ]
+      }
+    },
+    {
+      "id": "tiktok.im",
+      "name": "TikTok IM (protobuf, hidden gzip, X-Ss-Stub)",
+      "enabled": true, "priority": 700, "direction": "BOTH",
+      "match": {
+        "hostsAny": ["tiktok", "byteoversea", "bytedance"],
+        "pathRegex": "/(v[123])/(message|conversation)/"
+      },
+      "action": {
+        "forcePipeline": ["dechunk?", "gzip?", "protobuf"],
+        "encodingHeaders": ["X-Bd-Content-Encoding"],
+        "schemaPack": "tiktok.im",
+        "schemaSelect": "byDirection:REQUEST=Request,RESPONSE=Response",
+        "recomputeSig": { "enabled": false, "header": "X-Ss-Stub", "algo": "md5-upper-hex", "over": "wire-body" },
+        "label": { "from": "path-regex", "pattern": "/(v[123])/(message|conversation)/([^/?]+)", "template": "IM {2}/{3}" }
+      }
+    },
+    {
+      "id": "tiktok.generic",
+      "name": "TikTok generic body (auto + hidden gzip + stale stub)",
+      "enabled": true, "priority": 100, "direction": "BOTH",
+      "match": { "hostsAny": ["tiktok", "tiktokv", "byteoversea", "bytedance", "musical.ly", "ibyteimg"] },
+      "action": {
+        "forcePipeline": ["dechunk?", "gzip?", "auto-format"],
+        "encodingHeaders": ["X-Bd-Content-Encoding"],
+        "recomputeSig": { "enabled": false, "header": "X-Ss-Stub", "algo": "md5-upper-hex", "over": "wire-body" }
+      }
+    },
+    {
+      "id": "meta.graphql",
+      "name": "Meta / Facebook / Instagram GraphQL (form + embedded JSON)",
+      "enabled": true, "priority": 700, "direction": "REQUEST",
+      "match": {
+        "methods": ["POST"],
+        "anyOf": [
+          { "hostsAny": ["facebook.com", "instagram.com", "graph.facebook.com", "fbcdn.net", "meta.com"] },
+          { "headers": [{ "name": "x-fb-friendly-name" }] },
+          { "headerNamePrefixAny": ["x-fb-", "x-graphql-", "x-ig-"] }
+        ]
+      },
+      "action": {
+        "forcePipeline": ["gzip?", "zstd?", "form+json"],
+        "label": { "from": "form-json-field", "key": "fb_api_req_friendly_name", "template": "{value}", "alsoExtract": ["doc_id", "client_doc_id"] }
+      }
+    },
+    {
+      "id": "grpc.generic",
+      "name": "Generic gRPC / gRPC-Web (framing auto-detected by Content-Type)",
+      "enabled": true, "priority": 300, "direction": "BOTH",
+      "match": { "contentTypesAny": ["application/grpc"] },
+      "action": {
+        "perMessageCodecHeader": "grpc-encoding",
+        "label": { "from": "path-regex", "pattern": "/([^/]+)/([^/?]+)$", "template": "{1}/{2}" }
+      }
+    },
+    {
+      "id": "auto",
+      "name": "Auto-detect (catch-all)",
+      "enabled": true, "priority": 0, "direction": "BOTH",
+      "match": {},
+      "action": { "forcePipeline": ["auto"] }
+    }
+  ],
+  "schemaPacks": {},
+  "dictionaries": {}
+}

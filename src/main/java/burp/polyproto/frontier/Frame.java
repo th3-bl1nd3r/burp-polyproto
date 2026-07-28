@@ -15,7 +15,9 @@ import java.util.Map;
  *   1 seqid(u64) 2 logid(u64) 3 service(i32) 4 method(i32) 5 headers[] {1 key,2 value}
  *   6 payload_encoding(str "json"/"pb") 7 payload_type(str) 8 payload(bytes)
  *   9 logidnew(str) 10 server_timing(str) 11 msg_id(str)
- * The envelope does NOT compress the payload; the consuming service decides payload meaning.
+ * The envelope itself defines no compression, but payload_encoding is a real signal in the field:
+ * gzip and LZ4-block payloads both occur, and a compress_type header marks zstd-dict. FrameText
+ * peels those for display and restores them on edit.
  */
 public final class Frame {
     public long seqid, logid;

@@ -4,6 +4,7 @@ import burp.polyproto.protobuf.ProtoText;
 import burp.polyproto.protobuf.Protobuf;
 import burp.polyproto.stage.coding.Lz4Codec;
 import burp.polyproto.stage.format.ProtobufStage;
+import burp.polyproto.util.Compression;
 import burp.polyproto.util.JsonPretty;
 
 import java.nio.charset.StandardCharsets;
@@ -14,12 +15,19 @@ import java.nio.charset.StandardCharsets;
  * protobuf (lossless {@link ProtoText}), JSON (pretty), plain text, or hex — unless a
  * {@code compress_type} header says it is zstd-dict compressed, in which case it is shown as hex
  * with a note (needs the runtime dictionary).
+ *
+ * <p>gzip and LZ4-block payloads are decompressed for display and re-compressed by {@link #parse},
+ * so an edited frame goes back out in its transmitted form. Re-compression is not byte-identical to
+ * the original — deflate output is implementation-specific — which is fine because Frontier frames
+ * carry no per-frame signature.
  */
 public final class FrameText {
     private static final String M_PROTO = "--- payload (protobuf, editable) ---";
     private static final String M_JSON  = "--- payload (json) ---";
     private static final String M_TEXT  = "--- payload (text) ---";
     private static final String M_HEX   = "--- payload (hex) ---";
+    /** Marks a payload this class gunzipped for display, so {@link #parse} re-gzips it on the way out. */
+    private static final String N_GZIP  = "payload_note: decompressed from gzip";
 
     private enum Kind { PROTO, JSON, TEXT, HEX }
 
@@ -60,6 +68,17 @@ public final class FrameText {
                 sb.append(M_HEX).append('\n').append(hex(raw));
                 handled = true;
             }
+        } else if (Compression.isGzip(raw)) {
+            // Frontier ships gzip payloads under payload_encoding: gzip. Trust the magic rather than
+            // the header, but emit N_GZIP so parse() knows to re-compress an edited frame.
+            try {
+                p = Compression.gunzip(raw);
+                sb.append(N_GZIP).append('\n');
+            } catch (Exception e) {
+                sb.append("payload_note: gzip — could not decompress\n");
+                sb.append(M_HEX).append('\n').append(hex(raw));
+                handled = true;
+            }
         }
 
         if (!handled) {
@@ -81,6 +100,7 @@ public final class FrameText {
         String[] lines = text.split("\n", -1);
         Kind kind = null;
         int payloadStart = -1;
+        String note = "";
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
             String t = line.trim();
@@ -111,7 +131,8 @@ public final class FrameText {
                 case "logidnew": f.logidnew = val; break;
                 case "server_timing": f.serverTiming = val; break;
                 case "msg_id": f.msgId = val; break;
-                default: break; // payload_note and unknown lines are informational
+                case "payload_note": note = val.toLowerCase(); break;
+                default: break; // unknown lines are informational
             }
         }
         if (payloadStart >= 0 && payloadStart < lines.length) {
@@ -135,10 +156,15 @@ public final class FrameText {
                     f.payload = bodyStr.getBytes(StandardCharsets.UTF_8);
                     break;
             }
-            // Re-compress if the payload was decompressed from LZ4 for display (edited frames only).
-            if (kind != Kind.HEX && f.payloadEncoding != null
-                    && f.payloadEncoding.toLowerCase().contains("lz4")) {
-                try { f.payload = Lz4Codec.compress(f.payload); } catch (Exception ignore) { }
+            // Reverse whatever toText() decompressed for display. Never for a hex payload: that is
+            // shown as the exact wire bytes, so it is already in its transmitted form.
+            if (kind != Kind.HEX) {
+                String enc = f.payloadEncoding == null ? "" : f.payloadEncoding.toLowerCase();
+                if (enc.contains("lz4")) {
+                    try { f.payload = Lz4Codec.compress(f.payload); } catch (Exception ignore) { }
+                } else if (enc.contains("gzip") || note.contains("gzip")) {
+                    try { f.payload = Compression.gzip(f.payload); } catch (Exception ignore) { }
+                }
             }
         } else {
             f.payload = new byte[0];

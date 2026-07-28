@@ -14,7 +14,14 @@ dependencies {
     // Pure-Java codecs, bundled into the shadow jar (no JNI).
     implementation 'org.brotli:dec:0.1.2'            // brotli DECODE only (~30 KB)
     implementation 'io.airlift:aircompressor:0.27'   // zstd/lz4/snappy (no-dict, ~180 KB)
+
+    // Test-only — never reaches the shadow jar.
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+
+tasks.named('test') { useJUnitPlatform() }
 
 java {
     toolchain { languageVersion = JavaLanguageVersion.of(17) }

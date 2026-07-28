@@ -46,22 +46,17 @@ public final class SchemaRenderer {
             sb.append("}\n");
             return;
         }
-        String s = Protobuf.asPrintable(f.data);
+        if (Protobuf.looksNested(f.data)) {
+            sb.append(" {\n");
+            render(f.data, null, indent + 1, sb);
+            pad(sb, indent);
+            sb.append("}\n");
+            return;
+        }
+        String s = Protobuf.asCleanString(f.data);
         if (s != null) {
             sb.append(" = \"").append(s).append("\"\n");
             return;
-        }
-        if (f.data.length > 0) {
-            try {
-                List<Field> t = Protobuf.parse(f.data);
-                if (!t.isEmpty()) {
-                    sb.append(" {\n");
-                    render(f.data, null, indent + 1, sb);
-                    pad(sb, indent);
-                    sb.append("}\n");
-                    return;
-                }
-            } catch (Exception ignore) { /* not a nested message */ }
         }
         sb.append(" = <").append(f.data.length).append(" bytes>\n");
     }

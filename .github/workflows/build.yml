@@ -20,6 +20,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Test
+        run: ./gradlew test --no-daemon
+
       - name: Build shadow jar
         run: ./gradlew shadowJar --no-daemon
 

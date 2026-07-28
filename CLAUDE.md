@@ -21,10 +21,11 @@ Gradle installed. Montoya is `compileOnly` (Burp provides it at runtime); the pu
 
 ## Verify a change (do this before committing)
 
-1. `./gradlew shadowJar` must succeed (this is the build gate).
+1. `./gradlew test && ./gradlew shadowJar` must succeed (this is the build gate; CI runs both).
 2. Load the jar in Burp and exercise the path you touched (decode a real message, edit + replay).
-3. The `core/`, `stage/`, `rule/`, `protobuf/` packages have **no Montoya dependency** — engine logic
-   can be exercised headlessly with plain `javac` + a small `Msg` fake if you want a fast unit check.
+3. The `core/`, `stage/`, `rule/`, `protobuf/` packages have **no Montoya dependency**, so engine logic
+   is unit-testable — put tests in `src/test/java` (JUnit 5, test-only deps, never in the shadow jar).
+   Use **synthetic** values in tests; never paste captured traffic in, even as a fixture.
 
 ## How to extend (the common upgrades)
 

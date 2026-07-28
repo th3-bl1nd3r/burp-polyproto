@@ -35,14 +35,14 @@ On any message, the **Decoded** tab peels the layers automatically:
 **From a release:** download `polyproto.jar` from [Releases](../../releases), then in Burp →
 **Extensions → Add → Java** → select the jar.
 
-**From source:**
+**From source** (only JDK 17 needed — the Gradle wrapper is committed):
 
 ```bash
-gradle shadowJar        # -> build/libs/polyproto.jar  (bundles brotli + aircompressor, ~0.5 MB)
+./gradlew shadowJar        # -> build/libs/polyproto.jar  (Windows: gradlew.bat shadowJar)
 ```
 
-Requires JDK 17. The Montoya API is `compileOnly` (Burp provides it at runtime); the pure-Java
-codecs (`org.brotli:dec`, `io.airlift:aircompressor`) are bundled into the shadow jar.
+The Montoya API is `compileOnly` (Burp provides it at runtime); the pure-Java codecs
+(`org.brotli:dec`, `io.airlift:aircompressor`) are bundled into the shadow jar (~0.5 MB, no JNI).
 
 ## Rules
 
@@ -82,9 +82,11 @@ as new `Stage`s — PRs welcome.
 
 ## Contributing
 
-Issues and PRs welcome. New decoders are just a `Stage` (see `stage/coding/GzipStage.java` for the
-shape); new vendor field-names are a schema pack (see `pack/TikTokPack.java`) plus a rule in
-`builtins.json`. Run the build with `gradle shadowJar` and load the jar in Burp to test.
+Issues and PRs welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**. In short: new decoders are just a
+`Stage` (see `stage/coding/GzipStage.java`); new vendor field-names are a schema pack (see
+`pack/TikTokPack.java`) plus a rule in `builtins.json`. Build with `./gradlew shadowJar` and load the
+jar in Burp to test. Working with an AI agent? `CLAUDE.md` documents the build, upgrade paths, and the
+"no captured traffic / no build artifacts" guardrails.
 
 ## Disclaimer
 

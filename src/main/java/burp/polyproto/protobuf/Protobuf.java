@@ -146,18 +146,62 @@ public final class Protobuf {
     }
 
     private static void renderLen(byte[] d, int indent, StringBuilder sb) {
-        String s = asPrintable(d);
+        if (looksNested(d)) { sb.append(" (msg):\n"); render(d, null, indent + 1, sb); return; }
+        String s = asCleanString(d);
         if (s != null) { sb.append(" (str): \"").append(s).append("\"\n"); return; }
-        if (d.length > 0) {
-            try {
-                List<Field> sub = parse(d);
-                if (!sub.isEmpty()) { sb.append(" (msg):\n"); render(d, null, indent + 1, sb); return; }
-            } catch (Exception ignore) { /* not a message */ }
-        }
         sb.append(" (bytes[").append(d.length).append("]): ").append(hexPreview(d)).append("\n");
     }
 
-    /** Return the UTF-8 string only if the bytes look like printable text. */
+    // ---------------- LEN payload classification ----------------
+
+    /** Largest field number we will believe when guessing that a LEN payload is a nested message. */
+    private static final int MAX_NESTED_FIELD = 512;
+
+    /**
+     * Should this length-delimited payload be expanded as a nested message rather than shown as a
+     * string? Must be tried BEFORE {@link #asCleanString}: a nested message carrying tokens, IDs or
+     * URLs is well over 90% printable, so a printable-first test flattens it into one mangled value
+     * and its tag/length bytes surface as stray characters.
+     *
+     * <p>Guarded against the opposite mistake — short text that parses by luck, e.g. {@code "PB"}
+     * reading as {@code 10: 66}. The fields must re-encode to byte-identical input, carry plausible
+     * numbers, and — when the payload is clean text end to end — include at least one
+     * length-delimited field, which coincidental text effectively never does.
+     */
+    public static boolean looksNested(byte[] d) {
+        if (d == null || d.length < 2) return false;
+        List<Field> fs;
+        try { fs = parse(d); } catch (Exception e) { return false; }
+        if (fs.isEmpty()) return false;
+        for (Field f : fs) if (f.number > MAX_NESTED_FIELD) return false;
+        if (!Arrays.equals(encode(fs), d)) return false; // non-canonical: never was a message
+        if (asCleanString(d) == null) return true;
+        for (Field f : fs) if (f.wireType == LEN) return true;
+        return false;
+    }
+
+    /**
+     * The UTF-8 text of a length-delimited payload, or null when the bytes are not plainly text.
+     * Stricter than {@link #asPrintable}: a single C0 control byte (other than tab/CR/LF) means the
+     * buffer carries framing rather than text — the signature of a nested message.
+     */
+    public static String asCleanString(byte[] d) {
+        if (d == null) return null;
+        if (d.length == 0) return "";
+        for (byte value : d) {
+            int c = value & 0xff;
+            if (c == 0x09 || c == 0x0a || c == 0x0d) continue;
+            if (c < 0x20 || c == 0x7f) return null;
+        }
+        String s = new String(d, StandardCharsets.UTF_8);
+        return s.contains("�") ? null : s; // invalid UTF-8
+    }
+
+    /**
+     * Return the UTF-8 string only if the bytes look like printable text. Tolerant (90% threshold),
+     * so it stays the right gate for classifying a whole body; for a LEN payload inside a message
+     * use {@link #asCleanString} together with {@link #looksNested}.
+     */
     public static String asPrintable(byte[] d) {
         if (d.length == 0) return "";
         int printable = 0;

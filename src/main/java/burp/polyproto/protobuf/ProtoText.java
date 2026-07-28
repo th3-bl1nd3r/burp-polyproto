@@ -50,22 +50,17 @@ public final class ProtoText {
     }
 
     private static void encLen(Field f, int indent, StringBuilder sb) {
-        String s = Protobuf.asPrintable(f.data);
+        if (Protobuf.looksNested(f.data)) {
+            sb.append("{\n");
+            enc(f.data, indent + 1, sb);
+            pad(sb, indent);
+            sb.append("}\n");
+            return;
+        }
+        String s = Protobuf.asCleanString(f.data);
         if (s != null) {
             sb.append('"').append(escape(s)).append("\"\n");
             return;
-        }
-        if (f.data.length > 0) {
-            try {
-                List<Field> sub = Protobuf.parse(f.data);
-                if (!sub.isEmpty()) {
-                    sb.append("{\n");
-                    enc(f.data, indent + 1, sb);
-                    pad(sb, indent);
-                    sb.append("}\n");
-                    return;
-                }
-            } catch (Exception ignore) { /* not a nested message */ }
         }
         sb.append('`').append(hex(f.data)).append("`\n");
     }
@@ -148,7 +143,11 @@ public final class ProtoText {
                 case '\n': sb.append("\\n"); break;
                 case '\r': sb.append("\\r"); break;
                 case '\t': sb.append("\\t"); break;
-                default: sb.append(c);
+                default:
+                    // Never let a raw control byte sit invisibly in the editable text: an editor or
+                    // clipboard round-trip that drops it would silently corrupt the re-encode.
+                    if (c < 0x20 || c == 0x7f) sb.append(String.format("\\x%02x", (int) c));
+                    else sb.append(c);
             }
         }
         return sb.toString();
@@ -168,6 +167,16 @@ public final class ProtoText {
                     case 't': sb.append('\t'); break;
                     case '"': sb.append('"'); break;
                     case '\\': sb.append('\\'); break;
+                    case 'x':
+                        if (i + 2 < body.length()) {
+                            try {
+                                sb.append((char) Integer.parseInt(body.substring(i + 1, i + 3), 16));
+                                i += 2;
+                            } catch (NumberFormatException e) { sb.append('x'); }
+                        } else {
+                            sb.append('x');
+                        }
+                        break;
                     default: sb.append(n);
                 }
             } else {

@@ -1,7 +1,5 @@
 package burp.polyproto.protobuf;
 
-import burp.polyproto.stage.format.ProtobufStage;
-
 import java.time.Instant;
 import java.util.List;
 
@@ -95,19 +93,21 @@ public final class ProtoNodes {
             return;
         }
 
-        String text = Protobuf.asPrintable(d);
-        if (text != null) {
-            child.kind = ProtoNode.Kind.STRING;
-            child.typeLabel = "str";
-            child.value = text;
-            return;
-        }
-
-        if (d.length > 0 && ProtobufStage.isProtobuf(d)) {
+        // Nested-message detection comes BEFORE the text test: a message full of tokens/IDs reads as
+        // printable, and treating it as a string flattens its fields into one mangled value.
+        if (Protobuf.looksNested(d)) {
             child.kind = ProtoNode.Kind.MESSAGE;
             child.typeLabel = "msg";
             child.value = null; // message nodes render via children, not a scalar value
             child.children.addAll(parse(d, null).children);
+            return;
+        }
+
+        String text = Protobuf.asCleanString(d);
+        if (text != null) {
+            child.kind = ProtoNode.Kind.STRING;
+            child.typeLabel = "str";
+            child.value = text;
             return;
         }
 
